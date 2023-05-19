@@ -1,8 +1,10 @@
 import csv
-from datetime import datetime, date
+from datetime import datetime
 import hashlib
 import struct
 import base64
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolor
 
 # Converts a binary checksum to utf-8 str
 def checksum_to_str(bs: bytes) -> str:
@@ -103,6 +105,7 @@ class Frame:
       chk = bs[51:]
       return Frame(dta, sno, src, dst, chk)
 
+# To test for Essential Frames
 class Algorithm:
    lt: float # low  temperature
    ht: float # high temperature
@@ -118,6 +121,9 @@ class Algorithm:
       self.hh = hh
       self.lh = lh
       self.mh = (self.hh + self.lh) / 2
+
+   def __str__(self) -> str:
+      return "lt: %f  ht: %f mt: %f\nlh: %f  hh: %f mh: %f" % (self.lt, self.ht, self.mt, self.lh, self.hh, self.mh)
 
    def update(self, temp, humi) -> None:
       if temp < self.lt: self.lt = temp # Updating Temperature
@@ -142,9 +148,6 @@ class Algorithm:
       self.update(temp, humi)
       return isEssential
 
-   def __str__(self) -> str:
-      return "lt: %f  ht: %f mt: %f\nlh: %f  hh: %f mh: %f" % (self.lt, self.ht, self.mt, self.lh, self.hh, self.mh)
-
    @staticmethod
    def train(frames: list[Frame]):
       temps = [frame.dta.temperature for frame in frames] # list comprehension
@@ -161,6 +164,23 @@ class Algorithm:
 # temps = []
 # for frame in frames:
 #    temps.append(frame.dta.temperature)
+
+def scatter_plot(frames: list[Frame], essen_frames: list[Frame]) -> None:
+   essen_dates = [frame.dta.timestamp.strftime("%Y-%m-%d") for frame in essen_frames] 
+   essentials  = [frame.dta.timestamp.strftime("%H:%M:%S") for frame in essen_frames]
+   
+   all_dates  = [frame.dta.timestamp.strftime("%Y-%m-%d") for frame in frames] 
+   all_frames = [frame.dta.timestamp.strftime("%H:%M:%S") for frame in frames]
+
+   percentage = len(essentials) * 100 / len(all_frames)
+
+   plt.figure(figsize=(10, 6))
+   plt.scatter(all_dates,   all_frames, color=mcolor.CSS4_COLORS["lightskyblue"])
+   plt.scatter(essen_dates, essentials, color=mcolor.CSS4_COLORS["blue"])
+   plt.xlabel('Frames over a period of Month')
+   plt.title("Only %.2f%% Frames are passing from Network Layer => Data Link Layer" % percentage)
+   plt.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
+   plt.show()
 
 # Generate a binary file containing frames from a csv file 
 # containing timestamp, temperature, humidity
@@ -189,21 +209,26 @@ def read_frames_from_file(inputfile: str) -> list[Frame]:
       frames.append(frame)
    return frames
 
+def simulate_network_layer(sensor: list[Frame], checker: Algorithm) -> list[Frame]:
+   essential = []
+   for frame in sensor:
+      if checker.test(frame):
+         essential.append(frame)
+   return essential
+
 def main():
-   csv_to_binary_file("input_data2.csv", "input_frames.bin")
+   # Data travels over the network in the form of binary, thats why
+   csv_to_binary_file("input_data.csv", "input_frames.bin")
+   # Represents Frame traveling over the network
    frames  = read_frames_from_file("input_frames.bin")
    sample  = frames[0:24] # Frames received on the first day
-   checker = Algorithm.train(sample)
-   sensor  = frames[24:]  # Actual frames from the sensor 
-   i = 0
-   for frame in sensor:
-      # print(frame.dta)
-      # print(checker)
-      if (checker.test(frame)):
-         print(i)
-         print(frame)
-         print(checker)
-         i += 1
+   algo    = Algorithm.train(sample)
+   essentials = simulate_network_layer(frames, algo)
+   i = 1
+   for frame in essentials:
+      print("Essential Frame: %d" % i)
+      print(frame)
+      i += 1
 
 if __name__ == "__main__":
    main()
@@ -220,3 +245,5 @@ if __name__ == "__main__":
 # print(type(gen))
 # for element in gen:
 #    print("Printing %d" % element)
+
+# pip install -r requirements.txt

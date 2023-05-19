@@ -25,7 +25,7 @@ response = urlopen(url)
 
 json_data = json.load(response)
 
-outfile = open("input_data2.csv", "w")
+outfile = open("input_data.csv", "w")
 writer  = csv.writer(outfile, lineterminator="\n") 
 
 daily_data = json_data["data"]["weather"]
