@@ -222,11 +222,9 @@ def main():
    sample  = frames[0:24] # Frames received on the first day
    algo    = Algorithm.train(sample)
    essentials = simulate_network_layer(frames, algo)
-   i = 1
-   for frame in essentials:
-      print("Essential Frame: %d" % i)
+   for i, frame in enumerate(essentials):
+      print("Essential Frame: %d" % (i+1))
       print(frame)
-      i += 1
 
 if __name__ == "__main__":
    main()
