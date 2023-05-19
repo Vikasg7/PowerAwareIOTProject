@@ -188,13 +188,11 @@ def csv_to_binary_file(csvfile: str, outfile: str) -> None:
    out = open(outfile, "wb")
    inp = open(csvfile)
    reader = csv.reader(inp)
-   i = 1
-   for line in reader:
+   for i, line in enumerate(reader):
       timestamp, temp, humi = line # destructuring
       data = Data(str_to_datetime(timestamp, "%Y-%m-%d %H:%M:%S"), float(temp), float(humi))
-      sno = i
+      sno = i + 1
       out.write(Frame(data, sno).to_bytes())
-      i += 1
 
 # Reads frame from binary file
 def read_frames_from_file(inputfile: str) -> list[Frame]:
