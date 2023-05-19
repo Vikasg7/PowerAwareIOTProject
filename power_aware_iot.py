@@ -2,7 +2,6 @@ import csv
 from datetime import datetime, date
 import hashlib
 import struct
-from typing import Iterator 
 import base64
 
 # Converts a binary checksum to utf-8 str
@@ -104,6 +103,64 @@ class Frame:
       chk = bs[51:]
       return Frame(dta, sno, src, dst, chk)
 
+class Algorithm:
+   lt: float # low  temperature
+   ht: float # high temperature
+   mt: float # mid  temperature
+   lh: float # low  humidity
+   hh: float # high humidity
+   mh: float # mid  humidity
+
+   def __init__(self, lt: float = 0, ht: float = 0, lh: float = 0, hh: float = 0) -> None:
+      self.ht = ht
+      self.lt = lt
+      self.mt = (self.ht + self.lt) / 2
+      self.hh = hh
+      self.lh = lh
+      self.mh = (self.hh + self.lh) / 2
+
+   def update(self, temp, humi) -> None:
+      if temp < self.lt: self.lt = temp # Updating Temperature
+      if temp > self.ht: self.ht = temp 
+      self.mt = (self.mt + temp) / 2
+      if humi < self.lh: self.lh = humi # Updating Humidity
+      if humi > self.hh: self.hh = humi 
+      self.mh = (self.mh + humi) / 2
+
+   def test(self, frame: Frame) -> bool:
+      temp = frame.dta.temperature
+      humi = frame.dta.humidity
+      isEssential = False
+
+      if ((temp >= self.ht and humi >= self.hh) or
+          (temp <= self.lt and humi <= self.lh) or
+          (temp >= self.ht and humi <= self.lh) or
+          (temp <= self.lt and humi >= self.hh) or
+          (abs(temp - self.mt) <= 1.5 and abs(humi - self.mh) <= 1.5)):
+         isEssential = True
+
+      self.update(temp, humi)
+      return isEssential
+
+   def __str__(self) -> str:
+      return "lt: %f  ht: %f mt: %f\nlh: %f  hh: %f mh: %f" % (self.lt, self.ht, self.mt, self.lh, self.hh, self.mh)
+
+   @staticmethod
+   def train(frames: list[Frame]):
+      temps = [frame.dta.temperature for frame in frames] # list comprehension
+      humis = [frame.dta.humidity    for frame in frames]
+      lt = min(temps)
+      ht = max(temps)
+      lh = min(humis)
+      hh = max(humis)
+      return Algorithm(lt, ht, lh, hh)
+
+# List Comprehension
+# temps = [frame.dta.temperature for frame in frames]
+# equivalent to 
+# temps = []
+# for frame in frames:
+#    temps.append(frame.dta.temperature)
 
 # Generate a binary file containing frames from a csv file 
 # containing timestamp, temperature, humidity
@@ -120,25 +177,37 @@ def csv_to_binary_file(csvfile: str, outfile: str) -> None:
       i += 1
 
 # Reads frame from binary file
-def read_frames_from_file(inputfile: str) -> Iterator[Frame]:
+def read_frames_from_file(inputfile: str) -> list[Frame]:
    inp = open(inputfile, "rb")
+   frames = []
    while True:
       data = inp.read(FRAME_SIZE)
       if data == b'': break # read() retruns empty string when EOF is reached. 
       frame = Frame.from_bytes(data)
       if frame.chk != calculate_checksum(frame.dta.to_bytes()):
          raise ValueError("Invalid Frame")
-      yield frame
+      frames.append(frame)
+   return frames
 
 def main():
    csv_to_binary_file("input_data2.csv", "input_frames.bin")
-   frames = read_frames_from_file("input_frames.bin")
-   for frame in frames:
-      print(frame)
+   frames  = read_frames_from_file("input_frames.bin")
+   sample  = frames[0:24] # Frames received on the first day
+   checker = Algorithm.train(sample)
+   sensor  = frames[24:]  # Actual frames from the sensor 
+   i = 0
+   for frame in sensor:
+      # print(frame.dta)
+      # print(checker)
+      if (checker.test(frame)):
+         print(i)
+         print(frame)
+         print(checker)
+         i += 1
 
 if __name__ == "__main__":
    main()
-   
+
 # def mygen(bs):
 #    for b in bs:
 #       print("Generating value for %d" % b)
