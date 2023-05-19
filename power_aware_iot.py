@@ -84,7 +84,6 @@ class Frame:
              "  destination : %s\n" \
              "  data        : %s\n" \
              "  checksum    : %s\n" % (self.sno, self.src, self.dst, self.dta, checksum_to_str(self.chk))
-            
 
    # Convert the frame object to bytes representation
    def to_bytes(self) -> bytes:
@@ -228,18 +227,3 @@ def main():
 
 if __name__ == "__main__":
    main()
-
-# def mygen(bs):
-#    for b in bs:
-#       print("Generating value for %d" % b)
-#       yield b * 2
-#    print("Generator finished.")
-
-# gen = mygen([1,2,3,2,34,565,48,4,0])
-# print(gen.__next__())
-# print(gen.__next__())
-# print(type(gen))
-# for element in gen:
-#    print("Printing %d" % element)
-
-# pip install -r requirements.txt
