@@ -4,6 +4,17 @@ from datetime import datetime
 import json
 import csv
 
+def get_env(envfile) -> dict:
+   inp   = open(envfile)
+   lines = inp.read().splitlines()
+   vars = {}
+   for line in lines:
+      key, value = line.split("=", maxsplit=1)
+      vars[key] = value
+   return vars
+
+API_KEY = get_env(".env")["WORLD_WEATHER_ONLINE_API_KEY"]
+
 base_url = 'https://api.worldweatheronline.com/premium/v1/past-weather.ashx'
 query_params = {
    'q': 'kolkata',
@@ -11,7 +22,7 @@ query_params = {
    'enddate': '2023-01-31',
    'tp': '1',
    'format': 'json',
-   'key': 'f50f8355f937443a81d125110231905'
+   'key': API_KEY
 }
 
 # Encode the query parameters
@@ -25,7 +36,7 @@ response = urlopen(url)
 
 json_data = json.load(response)
 
-outfile = open("input_data.csv", "w")
+outfile = open("input_data2.csv", "w")
 writer  = csv.writer(outfile, lineterminator="\n") 
 
 daily_data = json_data["data"]["weather"]
