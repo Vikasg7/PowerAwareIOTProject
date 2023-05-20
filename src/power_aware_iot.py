@@ -215,9 +215,9 @@ def simulate_network_layer(sensor: list[Frame], checker: Algorithm) -> list[Fram
 
 def main():
    # Data travels over the network in the form of binary, thats why
-   csv_to_binary_file("input_data.csv", "input_frames.bin")
+   csv_to_binary_file("input/data.csv", "input/frames.bin")
    # Represents Frame traveling over the network
-   frames  = read_frames_from_file("input_frames.bin")
+   frames  = read_frames_from_file("input/frames.bin")
    sample  = frames[0:24] # Frames received on the first day
    algo    = Algorithm.train(sample)
    essentials = simulate_network_layer(frames, algo)
