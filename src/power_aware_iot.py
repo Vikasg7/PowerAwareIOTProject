@@ -3,9 +3,10 @@ from datetime import datetime
 import hashlib
 import struct
 import base64
+from typing import TypeVar, Generic
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolor
-from enum import StrEnum
+from enum import Enum, StrEnum
 
 # Enum for various format strings
 class Format(StrEnum):
@@ -61,20 +62,47 @@ class SensorData:
       humi = struct.unpack('d', bs[27:])[0]
       return SensorData(date, temp, humi)
 
+# To toggle between irrigation modes
+class Signal(Enum):
+   Off  = 1
+   Low  = 2
+   High = 3
+
+# To denote the current state of the irrigation
+SwitchState = Signal
+
+class SignalData():
+   type: Signal
+
+   def __init__(self, type: Signal) -> None:
+      self.type = type
+
+   def __str__(self) -> str:
+      return "%s" % self.type
+
+   def to_bytes(self) -> bytes:
+      return self.type.value.to_bytes()
+
+   @staticmethod
+   def from_bytes(bs: bytes):
+      return int.from_bytes(bs)
+
 SENSOR_FRAME_SIZE = 6 + 6 + 4 + 35 + 16
 
+T = TypeVar("T", SensorData, SignalData)
+
 # A data unit to carry data over a network
-class Frame:
+class Frame(Generic[T]):
    # Header
    src: str    # Source address (6 bytes)
    dst: str    # Destination address (6 bytes)
    sno: int    # Frame sequence number (4 bytes)
    # Payload
-   dta: SensorData   # Data payload (35 bytes)
+   dta: T  # Data payload (35 bytes)
    # Checksum
    chk: bytes  # MD5 hash checksum (16 bytes)
    
-   def __init__(self, data:        SensorData,
+   def __init__(self, data:        T,
                       serial_no:   int, 
                       source:      str          = "013A5B", 
                       destination: str          = "014D8E", 
@@ -111,6 +139,13 @@ class Frame:
       chk = bs[51:]
       return Frame(dta, sno, src, dst, chk)
 
+class FrameFlag(Enum):
+   HTHH = 1
+   HTLH = 2
+   LTLH = 3
+   LTHH = 4
+   MTMH = 5
+
 # To test for Essential Frames
 class Algorithm:
    lt: float # low  temperature
@@ -120,7 +155,10 @@ class Algorithm:
    hh: float # high humidity
    mh: float # mid  humidity
 
-   def __init__(self, lt: float = 0, ht: float = 0, lh: float = 0, hh: float = 0) -> None:
+   # Current state of switch
+   switch: SwitchState = SwitchState.Off
+
+   def __init__(self, lt: float, ht: float, lh: float, hh: float) -> None:
       self.ht = ht
       self.lt = lt
       self.mt = (self.ht + self.lt) / 2
@@ -139,19 +177,27 @@ class Algorithm:
       if humi > self.hh: self.hh = humi 
       self.mh = (self.mh + humi) / 2
 
-   def test(self, frame: Frame) -> bool:
+   def isEssential(self, frame: Frame) -> FrameFlag | None:
       temp = frame.dta.temperature
       humi = frame.dta.humidity
-      isEssential = False
+      flag: FrameFlag | None = None
       # Checking for essentials Frame
-      if ((temp >= self.ht and humi >= self.hh) or
-          (temp <= self.lt and humi <= self.lh) or
-          (temp >= self.ht and humi <= self.lh) or
-          (temp <= self.lt and humi >= self.hh) or
-          (abs(temp - self.mt) <= 1.5 and abs(humi - self.mh) <= 1.5)):
-         isEssential = True
+      if   temp >= self.ht and humi >= self.hh:
+         flag = FrameFlag.HTHH
+      elif temp <= self.lt and humi <= self.lh:
+         flag = FrameFlag.LTLH
+      elif temp >= self.ht and humi <= self.lh:
+         flag = FrameFlag.HTLH
+      elif temp <= self.lt and humi >= self.hh:
+         flag = FrameFlag.LTHH
+      elif abs(temp - self.mt) <= 1.5 and abs(humi - self.mh) <= 1.5:
+         flag = FrameFlag.MTMH
       self.update(temp, humi)
-      return isEssential
+      return flag
+
+   # Decision support system
+   def toggle(self, flag: FrameFlag) -> Frame[SignalData] | None:
+      pass
 
    @staticmethod
    def train(frames: list[Frame]):
@@ -189,39 +235,43 @@ def csv_to_binary_file(csvfile: str, outfile: str) -> None:
       timestamp, temp, humi = line # destructuring
       data = SensorData(str_to_datetime(timestamp, Format.DateTime), float(temp), float(humi))
       sno = i + 1
-      out.write(Frame(data, sno).to_bytes())
+      out.write(Frame[SensorData](data, sno).to_bytes())
 
-# Reads frame from binary file
-def read_frames_from_file(inputfile: str) -> list[Frame]:
+# Reads frame from binary file to simulate generation of frames in the sensor
+def generate_frames_from_binary(inputfile: str) -> list[Frame]:
    inp = open(inputfile, "rb")
    frames = []
    while True:
       data = inp.read(SENSOR_FRAME_SIZE)
       if data == b'': break # read() retruns empty string when EOF is reached. 
-      frame = Frame.from_bytes(data)
+      frame = Frame[SensorData].from_bytes(data)
       if frame.chk != calculate_checksum(frame.dta.to_bytes()):
          raise ValueError("Invalid Frame")
       frames.append(frame)
    return frames
 
-def simulate_network_layer(sensor: list[Frame], checker: Algorithm) -> list[Frame]:
-   essential = []
+def simulate_network_layer(sensor: list[Frame], algo: Algorithm) -> tuple[ list[Frame[SensorData]], list[Frame[SignalData]] ]:
+   essentials = []
+   signals = []
    for frame in sensor:
-      if checker.test(frame):
-         essential.append(frame)
-   return essential
+      flag = algo.isEssential(frame)
+      if flag is None: continue
+      essentials.append(frame)
+      signal = algo.toggle(flag)
+      if signal is None: continue
+      signals.append(signal)
+   return essentials, signals
 
 def main():
    # Data travels over the network in the form of binary, thats why
    csv_to_binary_file("input/data.csv", "input/frames.bin")
    # Represents Frame traveling over the network
-   frames  = read_frames_from_file("input/frames.bin")
+   frames  = generate_frames_from_binary("input/frames.bin")
    sample  = frames[0:24] # Frames received on the first day
    algo    = Algorithm.train(sample)
-   essentials = simulate_network_layer(frames, algo)
-   for i, frame in enumerate(essentials):
-      print("Essential Frame: %d" % (i+1))
-      print(frame)
+   essentials, signals = simulate_network_layer(frames, algo)
+   print("Essential Frame Count: %d" % len(essentials))
+   print("   Signal Frame Count: %d" % len(signals))
 
 if __name__ == "__main__":
    main()
