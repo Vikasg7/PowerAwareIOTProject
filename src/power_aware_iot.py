@@ -38,9 +38,9 @@ def date_to_str(date: datetime, format: Format) -> str:
 
 # Represents the data carried by the frame
 class SensorData:
-   timestamp: datetime
+   timestamp:   datetime
    temperature: float
-   humidity: float
+   humidity:    float
 
    def __init__(self, timestamp: datetime, temperature: float, humidity: float) -> None:
       self.timestamp   = timestamp
@@ -139,6 +139,10 @@ class Frame(Generic[T]):
       chk = bs[51:]
       return Frame(dta, sno, src, dst, chk)
 
+SensorFrames     = list[Frame[SensorData]]
+EssentialsFrames = list[Frame[SensorData]]
+SignalFrames     = list[Frame[SignalData]]
+
 class FrameFlag(Enum):
    HTHH = 1
    HTLH = 2
@@ -200,7 +204,7 @@ class Algorithm:
       pass
 
    @staticmethod
-   def train(frames: list[Frame]):
+   def train(frames: SensorFrames):
       temps = [frame.dta.temperature for frame in frames] # list comprehension
       humis = [frame.dta.humidity    for frame in frames]
       lt = min(temps)
@@ -209,7 +213,7 @@ class Algorithm:
       hh = max(humis)
       return Algorithm(lt, ht, lh, hh)
 
-def scatter_plot(frames: list[Frame], essen_frames: list[Frame]) -> None:
+def scatter_plot(frames: SensorFrames, essen_frames: EssentialsFrames) -> None:
    essen_dates = [date_to_str(frame.dta.timestamp, Format.Date) for frame in essen_frames] 
    essentials  = [date_to_str(frame.dta.timestamp, Format.Time) for frame in essen_frames]
    all_dates   = [date_to_str(frame.dta.timestamp, Format.Date) for frame in frames] 
@@ -238,7 +242,7 @@ def csv_to_binary_file(csvfile: str, outfile: str) -> None:
       out.write(Frame[SensorData](data, sno).to_bytes())
 
 # Reads frame from binary file to simulate generation of frames in the sensor
-def generate_frames_from_binary(inputfile: str) -> list[Frame]:
+def generate_frames_from_binary(inputfile: str) -> SensorFrames:
    inp = open(inputfile, "rb")
    frames = []
    while True:
@@ -250,7 +254,7 @@ def generate_frames_from_binary(inputfile: str) -> list[Frame]:
       frames.append(frame)
    return frames
 
-def simulate_network_layer(sensor: list[Frame], algo: Algorithm) -> tuple[ list[Frame[SensorData]], list[Frame[SignalData]] ]:
+def simulate_network_layer(sensor: SensorFrames, algo: Algorithm) -> tuple[EssentialsFrames, SignalFrames]:
    essentials = []
    signals = []
    for frame in sensor:
