@@ -5,6 +5,13 @@ import struct
 import base64
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolor
+from enum import StrEnum
+
+# Enum for various format strings
+class Format(StrEnum):
+   DateTime = "%Y-%m-%d %H:%M:%S"
+   Date     = "%Y-%m-%d"
+   Time     = "%H:%M:%S"
 
 # Converts a binary checksum to utf-8 str
 def checksum_to_str(bs: bytes) -> str:
@@ -16,16 +23,20 @@ def calculate_checksum(data: bytes) -> bytes:
    md5_hash.update(data)
    return md5_hash.digest()
 
-# Converts string to date using a formatstr
-def str_to_datetime(datestr: str, formatstr: str) -> datetime:
-   return datetime.strptime(datestr, formatstr)
+# Converts string to date using a format
+def str_to_datetime(datestr: str, format: Format) -> datetime:
+   return datetime.strptime(datestr, format)
 
-# Converts date to string represenation using a formatstr
-def date_to_bytes(date: datetime, formatstr: str) -> bytes:
-   return date.strftime(formatstr).encode()
+# Converts date to bytes represenation using a format
+def date_to_bytes(date: datetime, format: Format) -> bytes:
+   return date.strftime(format).encode()
+
+# Converts date to string represenation using a format
+def date_to_str(date: datetime, format: Format) -> str:
+   return date.strftime(format)
 
 # Represents the data carried by the frame
-class Data:
+class SensorData:
    timestamp: datetime
    temperature: float
    humidity: float
@@ -39,18 +50,18 @@ class Data:
       return "%s, %.2f, %.2f" % (self.timestamp, self.temperature, self.humidity)
 
    def to_bytes(self) -> bytes:
-      return date_to_bytes(self.timestamp, "%Y-%m-%d %H:%M:%S") + \
+      return date_to_bytes(self.timestamp, Format.DateTime) + \
              struct.pack('d', self.temperature) + \
              struct.pack('d', self.humidity)
 
    @staticmethod
    def from_bytes(bs: bytes):
-      date = str_to_datetime(bs[0:19].decode(), "%Y-%m-%d %H:%M:%S")
+      date = str_to_datetime(bs[0:19].decode(), Format.DateTime)
       temp = struct.unpack('d', bs[19:27])[0]
       humi = struct.unpack('d', bs[27:])[0]
-      return Data(date, temp, humi)
+      return SensorData(date, temp, humi)
 
-FRAME_SIZE = 6 + 6 + 4 + 35 + 16
+SENSOR_FRAME_SIZE = 6 + 6 + 4 + 35 + 16
 
 # A data unit to carry data over a network
 class Frame:
@@ -59,11 +70,11 @@ class Frame:
    dst: str    # Destination address (6 bytes)
    sno: int    # Frame sequence number (4 bytes)
    # Payload
-   dta: Data   # Data payload (35 bytes)
+   dta: SensorData   # Data payload (35 bytes)
    # Checksum
    chk: bytes  # MD5 hash checksum (16 bytes)
    
-   def __init__(self, data:        Data,
+   def __init__(self, data:        SensorData,
                       serial_no:   int, 
                       source:      str          = "013A5B", 
                       destination: str          = "014D8E", 
@@ -73,10 +84,6 @@ class Frame:
       self.sno = serial_no
       self.dta = data
       self.chk = checksum if checksum else calculate_checksum(data.to_bytes())
-      # if checksum:
-      #    self.chk = checksum
-      # else:
-      #    self.chk = calculate_checksum(data.to_bytes())
 
    def __str__(self) -> str:
       return "Frame: %d\n"\
@@ -100,7 +107,7 @@ class Frame:
       src = bs[0:6].decode()
       dst = bs[6:12].decode()
       sno = int.from_bytes(bs[12:16])
-      dta = Data.from_bytes(bs[16:51])
+      dta = SensorData.from_bytes(bs[16:51])
       chk = bs[51:]
       return Frame(dta, sno, src, dst, chk)
 
@@ -136,14 +143,13 @@ class Algorithm:
       temp = frame.dta.temperature
       humi = frame.dta.humidity
       isEssential = False
-
+      # Checking for essentials Frame
       if ((temp >= self.ht and humi >= self.hh) or
           (temp <= self.lt and humi <= self.lh) or
           (temp >= self.ht and humi <= self.lh) or
           (temp <= self.lt and humi >= self.hh) or
           (abs(temp - self.mt) <= 1.5 and abs(humi - self.mh) <= 1.5)):
          isEssential = True
-
       self.update(temp, humi)
       return isEssential
 
@@ -157,27 +163,19 @@ class Algorithm:
       hh = max(humis)
       return Algorithm(lt, ht, lh, hh)
 
-# List Comprehension
-# temps = [frame.dta.temperature for frame in frames]
-# equivalent to 
-# temps = []
-# for frame in frames:
-#    temps.append(frame.dta.temperature)
-
 def scatter_plot(frames: list[Frame], essen_frames: list[Frame]) -> None:
-   essen_dates = [frame.dta.timestamp.strftime("%Y-%m-%d") for frame in essen_frames] 
-   essentials  = [frame.dta.timestamp.strftime("%H:%M:%S") for frame in essen_frames]
-   
-   all_dates  = [frame.dta.timestamp.strftime("%Y-%m-%d") for frame in frames] 
-   all_frames = [frame.dta.timestamp.strftime("%H:%M:%S") for frame in frames]
-
+   essen_dates = [date_to_str(frame.dta.timestamp, Format.Date) for frame in essen_frames] 
+   essentials  = [date_to_str(frame.dta.timestamp, Format.Time) for frame in essen_frames]
+   all_dates   = [date_to_str(frame.dta.timestamp, Format.Date) for frame in frames] 
+   all_frames  = [date_to_str(frame.dta.timestamp, Format.Time) for frame in frames]
+   # Calculating percentage of essesntial frames
    percentage = len(essentials) * 100 / len(all_frames)
-
+   # Plotting on a Scatter Plot graph
    plt.figure(figsize=(10, 6))
    plt.scatter(all_dates,   all_frames, color=mcolor.CSS4_COLORS["lightskyblue"])
    plt.scatter(essen_dates, essentials, color=mcolor.CSS4_COLORS["blue"])
    plt.xlabel('Frames over a period of Month')
-   plt.title("Only %.2f%% Frames are passing from Network Layer => Data Link Layer" % percentage)
+   plt.title("Only %.2f%% Frames are passing from Network Layer to Data Link Layer" % percentage)
    plt.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
    plt.show()
 
@@ -189,7 +187,7 @@ def csv_to_binary_file(csvfile: str, outfile: str) -> None:
    reader = csv.reader(inp)
    for i, line in enumerate(reader):
       timestamp, temp, humi = line # destructuring
-      data = Data(str_to_datetime(timestamp, "%Y-%m-%d %H:%M:%S"), float(temp), float(humi))
+      data = SensorData(str_to_datetime(timestamp, Format.DateTime), float(temp), float(humi))
       sno = i + 1
       out.write(Frame(data, sno).to_bytes())
 
@@ -198,7 +196,7 @@ def read_frames_from_file(inputfile: str) -> list[Frame]:
    inp = open(inputfile, "rb")
    frames = []
    while True:
-      data = inp.read(FRAME_SIZE)
+      data = inp.read(SENSOR_FRAME_SIZE)
       if data == b'': break # read() retruns empty string when EOF is reached. 
       frame = Frame.from_bytes(data)
       if frame.chk != calculate_checksum(frame.dta.to_bytes()):
