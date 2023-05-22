@@ -64,21 +64,19 @@ class SensorData:
 
 # To toggle between irrigation modes
 class Signal(Enum):
-   Off  = 1
    Low  = 2
    High = 3
 
-# To denote the current state of the irrigation
-SwitchState = Signal
-
 class SignalData():
+   timestamp: datetime
    type: Signal
 
-   def __init__(self, type: Signal) -> None:
+   def __init__(self, timestamp: datetime, type: Signal) -> None:
+      self.timestamp = timestamp
       self.type = type
 
    def __str__(self) -> str:
-      return "%s" % self.type
+      return "%s, %s" % (self.timestamp, self.type)
 
    def to_bytes(self) -> bytes:
       return self.type.value.to_bytes()
@@ -149,6 +147,12 @@ class FrameFlag(Enum):
    LTLH = 3
    LTHH = 4
    MTMH = 5
+   HTMH = 6
+   LTMH = 7
+   MTLH = 8
+   MTHH = 9
+#          Frame                         SignalFrame
+# Sensor --------- Network Layer(Algo) --------------- Target Sensor(Sprinkler Irrigation Switch)
 
 # To test for Essential Frames
 class Algorithm:
@@ -158,9 +162,6 @@ class Algorithm:
    lh: float # low  humidity
    hh: float # high humidity
    mh: float # mid  humidity
-
-   # Current state of switch
-   switch: SwitchState = SwitchState.Off
 
    def __init__(self, lt: float, ht: float, lh: float, hh: float) -> None:
       self.ht = ht
@@ -187,21 +188,36 @@ class Algorithm:
       flag: FrameFlag | None = None
       # Checking for essentials Frame
       if   temp >= self.ht and humi >= self.hh:
-         flag = FrameFlag.HTHH
+         flag = FrameFlag.HTHH # Low
       elif temp <= self.lt and humi <= self.lh:
-         flag = FrameFlag.LTLH
+         flag = FrameFlag.LTLH # High
       elif temp >= self.ht and humi <= self.lh:
-         flag = FrameFlag.HTLH
+         flag = FrameFlag.HTLH # High
       elif temp <= self.lt and humi >= self.hh:
-         flag = FrameFlag.LTHH
+         flag = FrameFlag.LTHH # Off
+      elif temp >= self.ht and abs(humi - self.mh) <= 1.5:
+         flag = FrameFlag.HTMH # Low
+      elif temp <= self.lt and abs(humi - self.mh) <= 1.5:
+         flag = FrameFlag.LTMH # Low
+      elif abs(temp - self.mt) <= 1.5 and humi <= self.lh:
+         flag = FrameFlag.MTLH # High
+      elif abs(temp - self.mt) <= 1.5 and humi >= self.hh:
+         flag = FrameFlag.MTHH # off
       elif abs(temp - self.mt) <= 1.5 and abs(humi - self.mh) <= 1.5:
-         flag = FrameFlag.MTMH
+         flag = FrameFlag.MTMH # off
       self.update(temp, humi)
       return flag
 
    # Decision support system
-   def toggle(self, flag: FrameFlag) -> Frame[SignalData] | None:
-      pass
+   def toggle(self, frame: Frame[SensorData], flag: FrameFlag) -> Frame[SignalData] | None:
+      match flag:
+         case FrameFlag.HTHH: return Frame[SignalData](SignalData(frame.dta.timestamp, Signal.Low),  frame.sno, destination="025C8H")
+         case FrameFlag.LTLH: return Frame[SignalData](SignalData(frame.dta.timestamp, Signal.High), frame.sno, destination="025C8H")
+         case FrameFlag.HTLH: return Frame[SignalData](SignalData(frame.dta.timestamp, Signal.High), frame.sno, destination="025C8H")
+         case FrameFlag.HTMH: return Frame[SignalData](SignalData(frame.dta.timestamp, Signal.Low), frame.sno, destination="025C8H") 
+         case FrameFlag.LTMH: return Frame[SignalData](SignalData(frame.dta.timestamp, Signal.Low), frame.sno, destination="025C8H") 
+         case FrameFlag.MTLH: return Frame[SignalData](SignalData(frame.dta.timestamp, Signal.High), frame.sno, destination="025C8H") 
+         case              _: return None
 
    @staticmethod
    def train(frames: SensorFrames):
@@ -213,17 +229,24 @@ class Algorithm:
       hh = max(humis)
       return Algorithm(lt, ht, lh, hh)
 
-def scatter_plot(frames: SensorFrames, essen_frames: EssentialsFrames) -> None:
-   essen_dates = [date_to_str(frame.dta.timestamp, Format.Date) for frame in essen_frames] 
-   essentials  = [date_to_str(frame.dta.timestamp, Format.Time) for frame in essen_frames]
-   all_dates   = [date_to_str(frame.dta.timestamp, Format.Date) for frame in frames] 
-   all_frames  = [date_to_str(frame.dta.timestamp, Format.Time) for frame in frames]
+def scatter_plot(frames: SensorFrames, essen_frames: EssentialsFrames, signal_frames: SignalFrames) -> None:
+   essen_dates  = [date_to_str(frame.dta.timestamp, Format.Date) for frame in essen_frames] 
+   essen_times  = [date_to_str(frame.dta.timestamp, Format.Time) for frame in essen_frames]
+   signal_dates = [date_to_str(frame.dta.timestamp, Format.Date) for frame in signal_frames]
+   signal_times = [date_to_str(frame.dta.timestamp, Format.Time) for frame in signal_frames]
+   sensor_dates = [date_to_str(frame.dta.timestamp, Format.Date) for frame in frames] 
+   sensor_times = [date_to_str(frame.dta.timestamp, Format.Time) for frame in frames]
    # Calculating percentage of essesntial frames
-   percentage = len(essentials) * 100 / len(all_frames)
+   percentage = len(essen_times) * 100 / len(sensor_times)
    # Plotting on a Scatter Plot graph
    plt.figure(figsize=(10, 6))
-   plt.scatter(all_dates,   all_frames, color=mcolor.CSS4_COLORS["lightskyblue"])
-   plt.scatter(essen_dates, essentials, color=mcolor.CSS4_COLORS["blue"])
+   plt.scatter(sensor_dates,   sensor_times, color=mcolor.CSS4_COLORS["lightskyblue"])
+   plt.scatter(essen_dates,    essen_times,  color=mcolor.CSS4_COLORS["blue"])
+   for i in range(len(signal_frames)):
+      if signal_frames[i].dta.type == Signal.High:
+         plt.scatter(signal_dates[i], signal_times[i], color=mcolor.CSS4_COLORS["green"])
+      else:
+         plt.scatter(signal_dates[i], signal_times[i], color=mcolor.CSS4_COLORS["red"])
    plt.xlabel('Frames over a period of Month')
    plt.title("Only %.2f%% Frames are passing from Network Layer to Data Link Layer" % percentage)
    plt.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
@@ -261,10 +284,15 @@ def simulate_network_layer(sensor: SensorFrames, algo: Algorithm) -> tuple[Essen
       flag = algo.isEssential(frame)
       if flag is None: continue
       essentials.append(frame)
-      signal = algo.toggle(flag)
+      signal = algo.toggle(frame, flag)
       if signal is None: continue
       signals.append(signal)
    return essentials, signals
+
+def print_frames(frames: list[Frame[T]], msg: str) -> None:
+   for i, frame in enumerate(frames):
+      print("%s: %d" % (msg, i + 1))
+      print(frame)
 
 def main():
    # Data travels over the network in the form of binary, thats why
@@ -276,6 +304,8 @@ def main():
    essentials, signals = simulate_network_layer(frames, algo)
    print("Essential Frame Count: %d" % len(essentials))
    print("   Signal Frame Count: %d" % len(signals))
+   # print_frames(essentials, "Essential Frame")
+   # print_frames(signals, "Signal Frame")
 
 if __name__ == "__main__":
    main()

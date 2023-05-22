@@ -13,4 +13,8 @@ Simulating Frames traveling from the Sensor over the Network Layer and trying to
 
 - `visualize.ipynb` - A Jupiter notebook to use API exposed by _power_aware_iot.py_ and visualize the amount of Essential Frames passing through after applying the Algorithm.  
 
-- `get_historic_weather_data.py` - To pull some historic weather data to simulate the temperature and humidity data coming from the sensor.
+- `get_historic_weather_data.py` - To pull some historic weather data to simulate the temperature and humidity data coming from the sensor.  
+
+### Sources
+- [World Weather Online](https://www.worldweatheronline.com/weather-api/api/historical-weather-api.aspx)  
+- [Kaggle](https://www.kaggle.com/datasets/sathyanarayanrao89/soil-moisture-data-from-field-scale-sensor-network)
