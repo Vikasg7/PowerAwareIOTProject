@@ -16,5 +16,4 @@ Simulating Frames traveling from the Sensor over the Network Layer and trying to
 - `get_historic_weather_data.py` - To pull some historic weather data to simulate the temperature and humidity data coming from the sensor.  
 
 ### Sources
-- [World Weather Online](https://www.worldweatheronline.com/weather-api/api/historical-weather-api.aspx)  
-- [Kaggle](https://www.kaggle.com/datasets/sathyanarayanrao89/soil-moisture-data-from-field-scale-sensor-network)
+- [World Weather Online](https://www.worldweatheronline.com/weather-api/api/historical-weather-api.aspx)
