@@ -201,7 +201,8 @@ class Algorithm:
       return flag
 
    # Decision support system
-   def toggle(self, frame: Frame[SensorData], flag: FrameFlag) -> Frame[SignalData] | None:
+   @staticmethod
+   def toggle(frame: Frame[SensorData], flag: FrameFlag) -> Frame[SignalData] | None:
       signal_type: Signal  
       match flag:
          case FrameFlag.HTHH: signal_type = Signal.Low
@@ -285,7 +286,7 @@ def simulate_network_layer(sensor: SensorFrames, algo: Algorithm) -> tuple[Essen
       flag = algo.isEssential(frame)
       if flag is None: continue
       essentials.append(frame)
-      signal = algo.toggle(frame, flag)
+      signal = Algorithm.toggle(frame, flag)
       if signal is None: continue
       signals.append(signal)
    return essentials, signals
@@ -303,10 +304,10 @@ def main():
    sample  = frames[0:24] # Frames received on the first day
    algo    = Algorithm.train(sample)
    essentials, signals = simulate_network_layer(frames, algo)
-   print("Essential Frame Count: %d" % len(essentials))
-   print("   Signal Frame Count: %d" % len(signals))
    print_frames(essentials, "Essential Frame")
    print_frames(signals,    "Signal Frame")
+   print("Essential Frame Count: %d" % len(essentials))
+   print("   Signal Frame Count: %d" % len(signals))
 
 if __name__ == "__main__":
    main()
