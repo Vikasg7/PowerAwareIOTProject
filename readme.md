@@ -5,7 +5,7 @@ Simulating Frames traveling from the Sensor over the Network Layer and trying to
 - Install Python version >= 3.10 from [python.org](https://www.python.org/downloads/)
 
 - ```console
-  pip install -r requirements
+  pip install -r requirements.txt
   ```
 
 ### Ingredients
