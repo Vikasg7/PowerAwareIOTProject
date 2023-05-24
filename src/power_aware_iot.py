@@ -87,20 +87,20 @@ class SignalData():
 
 SENSOR_FRAME_SIZE = 6 + 6 + 4 + 35 + 16
 
-T = TypeVar("T", SensorData, SignalData)
+Data = TypeVar("Data", SensorData, SignalData)
 
 # A data unit to carry data over a network
-class Frame(Generic[T]):
+class Frame(Generic[Data]):
    # Header
    src: str    # Source address (6 bytes)
    dst: str    # Destination address (6 bytes)
    sno: int    # Frame sequence number (4 bytes)
    # Payload
-   dta: T  # Data payload (35 bytes)
+   dta: Data  # Data payload (35 bytes)
    # Checksum
    chk: bytes  # MD5 hash checksum (16 bytes)
    
-   def __init__(self, data:        T,
+   def __init__(self, data:        Data,
                       serial_no:   int, 
                       source:      str          = "013A5B", 
                       destination: str          = "014D8E", 
@@ -203,15 +203,15 @@ class Algorithm:
    # Decision support system
    @staticmethod
    def toggle(frame: Frame[SensorData], flag: FrameFlag) -> Frame[SignalData] | None:
-      signal_type: Signal  
-      match flag:
-         case FrameFlag.HTHH: signal_type = Signal.Low
-         case FrameFlag.LTLH: signal_type = Signal.High
-         case FrameFlag.HTLH: signal_type = Signal.High
-         case FrameFlag.HTMH: signal_type = Signal.Low 
-         case FrameFlag.LTMH: signal_type = Signal.Low 
-         case FrameFlag.MTLH: signal_type = Signal.High 
-         case              _: return None
+      signal_type: Signal | None
+      signal_type = Signal.Low  if flag == FrameFlag.HTHH else \
+                    Signal.High if flag == FrameFlag.LTLH else \
+                    Signal.High if flag == FrameFlag.HTLH else \
+                    Signal.Low  if flag == FrameFlag.HTMH else \
+                    Signal.Low  if flag == FrameFlag.LTMH else \
+                    Signal.High if flag == FrameFlag.MTLH else \
+                    None
+      if not signal_type: return None
       return Frame[SignalData](SignalData(frame.dta.timestamp, signal_type), frame.sno, destination="025C8H")
 
    @staticmethod
@@ -291,7 +291,7 @@ def simulate_network_layer(sensor: SensorFrames, algo: Algorithm) -> tuple[Essen
       signals.append(signal)
    return essentials, signals
 
-def print_frames(frames: list[Frame[T]], msg: str | None = None) -> None:
+def print_frames(frames: list[Frame[Data]], msg: str | None = None) -> None:
    for i, frame in enumerate(frames):
       if msg: print("%s: %d" % (msg, i + 1))
       print(frame)
