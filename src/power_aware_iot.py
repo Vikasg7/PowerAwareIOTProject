@@ -163,6 +163,8 @@ class Algorithm:
    hh: float # high humidity
    mh: float # mid  humidity
 
+   MID_LIMIT: float = 1.5
+
    def __init__(self, lt: float, ht: float, lh: float, hh: float) -> None:
       self.ht = ht
       self.lt = lt
@@ -191,11 +193,11 @@ class Algorithm:
              FrameFlag.LTLH if temp <= self.lt and humi <= self.lh else \
              FrameFlag.HTLH if temp >= self.ht and humi <= self.lh else \
              FrameFlag.LTHH if temp <= self.lt and humi >= self.hh else \
-             FrameFlag.HTMH if temp >= self.ht and abs(humi - self.mh) <= 1.5 else \
-             FrameFlag.LTMH if temp <= self.lt and abs(humi - self.mh) <= 1.5 else \
-             FrameFlag.MTLH if abs(temp - self.mt) <= 1.5 and humi <= self.lh else \
-             FrameFlag.MTHH if abs(temp - self.mt) <= 1.5 and humi >= self.hh else \
-             FrameFlag.MTMH if abs(temp - self.mt) <= 1.5 and abs(humi - self.mh) <= 1.5 else \
+             FrameFlag.HTMH if temp >= self.ht and abs(humi - self.mh) <= self.MID_LIMIT else \
+             FrameFlag.LTMH if temp <= self.lt and abs(humi - self.mh) <= self.MID_LIMIT else \
+             FrameFlag.MTLH if abs(temp - self.mt) <= self.MID_LIMIT and humi <= self.lh else \
+             FrameFlag.MTHH if abs(temp - self.mt) <= self.MID_LIMIT and humi >= self.hh else \
+             FrameFlag.MTMH if abs(temp - self.mt) <= self.MID_LIMIT and abs(humi - self.mh) <= self.MID_LIMIT else \
              None      
       self.update(temp, humi)
       return flag
