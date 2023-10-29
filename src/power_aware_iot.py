@@ -3,7 +3,6 @@ from datetime import datetime
 import hashlib
 import struct
 import base64
-from typing import TypeVar, Generic
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolor
 from enum import Enum, StrEnum
@@ -67,7 +66,7 @@ class Signal(Enum):
    Low  = 2
    High = 3
 
-class SignalData():
+class SignalData:
    timestamp: datetime
    type: Signal
 
@@ -87,20 +86,20 @@ class SignalData():
 
 SENSOR_FRAME_SIZE = 6 + 6 + 4 + 35 + 16
 
-Data = TypeVar("Data", SensorData, SignalData)
+type Data = SensorData | SignalData
 
 # A data unit to carry data over a network
-class Frame(Generic[Data]):
+class Frame[T: Data]:
    # Header
    src: str    # Source address (6 bytes)
    dst: str    # Destination address (6 bytes)
    sno: int    # Frame sequence number (4 bytes)
    # Payload
-   dta: Data  # Data payload (35 bytes)
+   dta: T  # Data payload (35 bytes)
    # Checksum
    chk: bytes  # MD5 hash checksum (16 bytes)
    
-   def __init__(self, data:        Data,
+   def __init__(self, data:        T,
                       serial_no:   int, 
                       source:      str          = "013A5B", 
                       destination: str          = "014D8E", 
@@ -137,9 +136,9 @@ class Frame(Generic[Data]):
       chk = bs[51:]
       return Frame(dta, sno, src, dst, chk)
 
-SensorFrames     = list[Frame[SensorData]]
-EssentialsFrames = list[Frame[SensorData]]
-SignalFrames     = list[Frame[SignalData]]
+type SensorFrames     = list[Frame[SensorData]]
+type EssentialsFrames = list[Frame[SensorData]]
+type SignalFrames     = list[Frame[SignalData]]
 
 class FrameFlag(Enum):
    HTHH = 1
@@ -214,7 +213,7 @@ class Algorithm:
                     Signal.High if flag == FrameFlag.MTLH else \
                     None
       if not signal_type: return None
-      return Frame[SignalData](SignalData(frame.dta.timestamp, signal_type), frame.sno, destination="025C8H")
+      return Frame(SignalData(frame.dta.timestamp, signal_type), frame.sno, destination="025C8H")
 
    @staticmethod
    def train(frames: SensorFrames):
@@ -266,7 +265,7 @@ def csv_to_binary_file(csvfile: str, outfile: str) -> None:
       timestamp, temp, humi = line # destructuring
       data = SensorData(str_to_datetime(timestamp, Format.DateTime), float(temp), float(humi))
       sno = i + 1
-      out.write(Frame[SensorData](data, sno).to_bytes())
+      out.write(Frame(data, sno).to_bytes())
 
 # Reads frame from binary file to simulate generation of frames in the sensor
 def generate_frames_from_binary(inputfile: str) -> SensorFrames:

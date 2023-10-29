@@ -5,7 +5,11 @@ Simulating Frames traveling from the Sensor over the Network Layer and trying to
 - Install Python version >= 3.10 from [python.org](https://www.python.org/downloads/)
 
 - ```console
-  pip install -r requirements.txt
+  $ python3.12 -m venv .venv
+  $ source .venv/bin/activate
+  $ pip install -r requirements.txt
+  $ python src/power_aware_iot.py
+  $ deactivate
   ```
 
 ### Ingredients
