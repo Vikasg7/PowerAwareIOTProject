@@ -2,14 +2,22 @@
 Simulating Frames traveling from the Sensor over the Network Layer and trying to reduce the amount of Frames passing through the Network using an Algorithm by marking them as Essential Frames.
 
 ## Installation
-- Install Python version >= 3.10 from [python.org](https://www.python.org/downloads/)
+- Install Python version >= 3.12 from [python.org](https://www.python.org/downloads/)
 
-- ```console
+- ```bash
   $ python3.12 -m venv .venv
   $ source .venv/bin/activate
   $ pip install -r requirements.txt
   $ python src/power_aware_iot.py
   $ deactivate
+  ```
+
+- or use `make`
+  ```bash
+  $ make venv # initialize virtual enviroment
+  $ make install # install deps from requirements.txt
+  $ make run # runs src/power_aware_iot.py
+  $ make clean # removes .venv
   ```
 
 ### Ingredients
