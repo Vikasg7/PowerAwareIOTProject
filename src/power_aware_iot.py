@@ -86,20 +86,18 @@ class SignalData:
 
 SENSOR_FRAME_SIZE = 6 + 6 + 4 + 35 + 16
 
-type Data = SensorData | SignalData
-
 # A data unit to carry data over a network
-class Frame[T: Data]:
+class Frame[DataT: (SensorData, SignalData)]:
    # Header
    src: str    # Source address (6 bytes)
    dst: str    # Destination address (6 bytes)
    sno: int    # Frame sequence number (4 bytes)
    # Payload
-   dta: T  # Data payload (35 bytes)
+   dta: DataT  # Data payload (35 bytes)
    # Checksum
    chk: bytes  # MD5 hash checksum (16 bytes)
    
-   def __init__(self, data:        T,
+   def __init__(self, data:        DataT,
                       serial_no:   int, 
                       source:      str          = "013A5B", 
                       destination: str          = "014D8E", 
@@ -292,7 +290,7 @@ def simulate_network_layer(sensor: SensorFrames, algo: Algorithm) -> tuple[Essen
       signals.append(signal)
    return essentials, signals
 
-def print_frames(frames: list[Frame[Data]], msg: str | None = None) -> None:
+def print_frames[T: (SensorData, SignalData)](frames: list[Frame[T]], msg: str | None = None) -> None:
    for i, frame in enumerate(frames):
       if msg: print("%s: %d" % (msg, i + 1))
       print(frame)
